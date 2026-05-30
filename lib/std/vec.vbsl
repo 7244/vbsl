@@ -1,0 +1,45 @@
+struct vec_t<T>{
+  let ptr: unsafe{ vbsl::ptr_t<T> };
+  let usage: size_t;
+  let capacity: size_t;
+
+  fn push(v): size_t {
+    let r = usage;
+
+    if usage == capacity {
+      capacity = if capacity { capacity * 2 } else { 1 }; 
+      unsafe {
+        ptr = vbsl::generic_realloc_bit(ptr, capacity * vbsl::sizeof_bit(ptr[0]));
+      }
+    }
+    unsafe{
+      ptr[r] = v;
+    }
+
+    usage += 1;
+
+    r
+  }
+  fn pop(): Result<T, _> {
+    if usage == 0 {
+      return Err({})
+    }
+
+    usage -= 1;
+
+    unsafe{
+      return Ok(ptr[usage]);
+    }
+  }
+
+  fn operator[](size_t i): Result<T&, _> {
+    if i >= usage {
+      return Err({});
+    }
+
+    unsafe{
+      return Ok(&ptr[i]);
+    }
+  }
+};
+

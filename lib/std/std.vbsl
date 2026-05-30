@@ -1,0 +1,7 @@
+struct std{
+  include!(<std/vec.vbsl>)
+  include!(<std/string_format.vbsl>)
+};
+
+
+struct finish std;
