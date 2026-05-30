@@ -109,9 +109,9 @@ int main(int argc, const char **argv){
     exit(1);
   }
 
-  pile.Expands.push(pile.FileDatas.push("lib/std/std.vbsl"));
-
   pile.Expands.push(pile.FileDatas.push(argv[1]));
+
+  pile.Expands.push(pile.FileDatas.push("lib/std/std.vbsl"));
 
   assert(pile.run() == 0);
 
