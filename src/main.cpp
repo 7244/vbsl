@@ -5,14 +5,18 @@
 #include <WITCH/WITCH.h>
 #include <WITCH/IO/IO.h>
 #include <WITCH/A/A.h>
+#include <WITCH/PR/PR.h>
 
 #include "dme.h"
-
-#include <cassert>
 
 #include <print>
 #include <vector>
 #include <string>
+
+#ifdef assert
+  #undef assert
+#endif
+#define assert(v) if(!(v)){ __abort(); }
 
 struct pile_t{
   struct FileDatas_t{
@@ -76,28 +80,18 @@ struct pile_t{
       Expands.push_back(Expand);
     }
 
-    uint8_t i(){
-      gt_begin:;
-
+    void _if_possible_seek_to_nonzero(){
       #if set_debug
         assert(Expands.size() > 0);
       #endif
 
-      uint8_t ret = *Expands.back().i;
-
-      Expands.back().i += 1;
-
-      if(ret == 0){
-        /* need pop */
-        
-        _pop();
-
-        if(Expands.size()){
-          goto gt_begin;
+      while(*Expands.back().i == 0){
+        if(Expands.size() == 1){
+          break;
         }
-      }
 
-      return ret;
+        _pop();
+      }
     }
 
     uint8_t gc(){
@@ -108,9 +102,29 @@ struct pile_t{
       return *Expands.back().i;
     }
 
+    uint8_t i(){
+      #if set_debug
+        assert(Expands.size() > 0);
+      #endif
+
+      auto ret = gc();
+
+      Expands.back().i += 1;
+      
+      while(*Expands.back().i == 0){
+        if(Expands.size() == 1){
+          break;
+        }
+
+        _pop();
+      }
+
+      return ret;
+    }
+
     void SkipTillSomething(){
-      uint8_t r = gc();
       while(1){
+        auto r = gc();
         if(
           r != ' '
           && r != '\r'
@@ -120,36 +134,173 @@ struct pile_t{
           break;
         }
 
-        r = i();
+        i();
       }
     }
   }Expands;
 
-  _dme(keywords, void,
-    ,structa
-    ,includea
-    ,let
-    ,fn
+  _dme(keywords, __empty_struct
+    ,_struct
+    ,_include
+    ,_let
+    ,_fn
   );
 
   uintptr_t run(){
+    auto& e = Expands;
+    e._if_possible_seek_to_nonzero();
+
     struct token_t{
-      enum class e_t{
+      enum class t_t{
         keyword,
         number,
+        dot,
+        plus_or_minus,
+        string,
+        character,
+        cbracket_open,
+        cbracket_close,
+        sbracket_open,
+        sbracket_close,
+        parenthese_open,
+        parenthese_close,
+        semicolon,
       };
-      e_t e;
+      t_t t;
       std::string data;
     };
+    auto parse_token = [&](){
+      auto t = (token_t::t_t)-1;
+      std::string data;
 
-    auto& e = Expands;
+      if(STR_ischar_char(e.gc()) || e.gc() == '_'){
+        t = token_t::t_t::keyword;
+      }
+      else if(STR_ischar_digit(e.gc())){
+        t = token_t::t_t::number;
+      }
+      else if(e.gc() == '.'){
+        t = token_t::t_t::dot;
+        e.i();
+      }
+      else if(e.gc() == '-' || e.gc() == '+'){
+        t = token_t::t_t::plus_or_minus;
+        data.push_back(e.gc());
+        e.i();
+      }
+      else if(e.gc() == '"'){
+        t = token_t::t_t::string;
+        e.i();
+        while(1){
+          auto c = e.gc();
+          if(c == '"'){
+            e.i();
+            break;
+          }
+          if(c == 0){
+            __abort();
+          }
+          data.push_back(c);
+          e.i();
+        }
+      }
+      else if(e.gc() == '\''){
+        t = token_t::t_t::character;
+        e.i();
+        while(1){
+          auto c = e.gc();
+          if(c == '\''){
+            e.i();
+            break;
+          }
+          if(c == 0){
+            __abort();
+          }
+          data.push_back(c);
+          e.i();
+        }
+      }
+      else if(e.gc() == '{'){
+        t = token_t::t_t::cbracket_open;
+        e.i();
+      }
+      else if(e.gc() == '}'){
+        t = token_t::t_t::cbracket_close;
+        e.i();
+      }
+      else if(e.gc() == '['){
+        t = token_t::t_t::sbracket_open;
+        e.i();
+      }
+      else if(e.gc() == ']'){
+        t = token_t::t_t::sbracket_close;
+        e.i();
+      }
+      else if(e.gc() == '('){
+        t = token_t::t_t::parenthese_open;
+        e.i();
+      }
+      else if(e.gc() == ')'){
+        t = token_t::t_t::parenthese_close;
+        e.i();
+      }
+      else if(e.gc() == ';'){
+        t = token_t::t_t::semicolon;
+        e.i();
+      }
+      #if set_debug
+        else{
+          std::println("first character was {}", (char)e.gc());
+        }
+      #endif
+
+      assert(t != (token_t::t_t)-1);
+
+      if(t == token_t::t_t::keyword || t == token_t::t_t::number){
+        while(1){
+          auto c = e.gc();
+          if(STR_ischar_digit(c) || STR_ischar_char(c) || c == '_'){}
+          else{
+            break;
+          }
+          data.push_back(c);
+          e.i();
+        }
+      }
+
+      return (token_t){
+        .t = t,
+        .data = data,
+      };
+    };
+
+    std::vector<token_t> tokens;
+
+    struct struct_data_t{
+
+    };
+    std::vector<struct_data_t> structs;
+    structs.push_back({});
+
+    struct scope_t{
+      uintptr_t StructID;
+      std::vector<token_t> tokens;
+    };
+    std::vector<scope_t> scopes;
+    scopes.push_back({
+      .StructID = 0
+    });
+
     while(1){
       e.SkipTillSomething();
       if(e.gc() == 0){
         break;
       }
 
-
+      auto token = parse_token();
+      scopes.back().tokens.push_back(token);
+      std::println("{}", token.data);
+      //if(token.t == token_t::t_t::cbracket_close)
     }
     return 0;
   }
