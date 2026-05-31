@@ -6,6 +6,8 @@
 #include <WITCH/IO/IO.h>
 #include <WITCH/A/A.h>
 
+#include "dme.h"
+
 #include <cassert>
 
 #include <print>
@@ -97,9 +99,58 @@ struct pile_t{
 
       return ret;
     }
+
+    uint8_t gc(){
+      #if set_debug
+        assert(Expands.size() > 0);
+      #endif
+
+      return *Expands.back().i;
+    }
+
+    void SkipTillSomething(){
+      uint8_t r = gc();
+      while(1){
+        if(
+          r != ' '
+          && r != '\r'
+          && r != '\n'
+          && r != '\t'
+        ){
+          break;
+        }
+
+        r = i();
+      }
+    }
   }Expands;
 
+  _dme(keywords, void,
+    ,structa
+    ,includea
+    ,let
+    ,fn
+  );
+
   uintptr_t run(){
+    struct token_t{
+      enum class e_t{
+        keyword,
+        number,
+      };
+      e_t e;
+      std::string data;
+    };
+
+    auto& e = Expands;
+    while(1){
+      e.SkipTillSomething();
+      if(e.gc() == 0){
+        break;
+      }
+
+
+    }
     return 0;
   }
 }pile;
