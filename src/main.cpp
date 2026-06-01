@@ -12,6 +12,7 @@
 #include <print>
 #include <vector>
 #include <string>
+#include <variant>
 
 #ifdef assert
   #undef assert
@@ -151,45 +152,46 @@ struct pile_t{
     e._if_possible_seek_to_nonzero();
 
     struct token_t{
-      enum class t_t{
-        keyword,
-        number,
-        dot,
-        plus_or_minus,
-        string,
-        character,
-        cbracket_open,
-        cbracket_close,
-        sbracket_open,
-        sbracket_close,
-        parenthese_open,
-        parenthese_close,
-        semicolon,
-      };
-      t_t t;
+      _dme(t_t, __empty_struct
+        ,_none
+        ,word
+        ,number
+        ,dot
+        ,plus_or_minus
+        ,string
+        ,character
+        ,cbracket_open
+        ,cbracket_close
+        ,sbracket_open
+        ,sbracket_close
+        ,parenthese_open
+        ,parenthese_close
+        ,semicolon
+      );
+      t_t::id_t t;
       std::string data;
     };
     auto parse_token = [&](){
-      auto t = (token_t::t_t)-1;
+      auto t = token_t::t_t::id_t{};
       std::string data;
 
       if(STR_ischar_char(e.gc()) || e.gc() == '_'){
-        t = token_t::t_t::keyword;
+        t = token_t::t_t{}["word"];
       }
       else if(STR_ischar_digit(e.gc())){
-        t = token_t::t_t::number;
+        t = token_t::t_t{}["number"];
       }
       else if(e.gc() == '.'){
-        t = token_t::t_t::dot;
+        t = token_t::t_t{}["dot"];
         e.i();
       }
       else if(e.gc() == '-' || e.gc() == '+'){
-        t = token_t::t_t::plus_or_minus;
+        t = token_t::t_t{}["plus_or_minus"];
         data.push_back(e.gc());
         e.i();
       }
       else if(e.gc() == '"'){
-        t = token_t::t_t::string;
+        t = token_t::t_t{}["string"];
         e.i();
         while(1){
           auto c = e.gc();
@@ -205,7 +207,7 @@ struct pile_t{
         }
       }
       else if(e.gc() == '\''){
-        t = token_t::t_t::character;
+        t = token_t::t_t{}["character"];
         e.i();
         while(1){
           auto c = e.gc();
@@ -221,31 +223,31 @@ struct pile_t{
         }
       }
       else if(e.gc() == '{'){
-        t = token_t::t_t::cbracket_open;
+        t = token_t::t_t{}["cbracket_open"];
         e.i();
       }
       else if(e.gc() == '}'){
-        t = token_t::t_t::cbracket_close;
+        t = token_t::t_t{}["cbracket_close"];
         e.i();
       }
       else if(e.gc() == '['){
-        t = token_t::t_t::sbracket_open;
+        t = token_t::t_t{}["sbracket_open"];
         e.i();
       }
       else if(e.gc() == ']'){
-        t = token_t::t_t::sbracket_close;
+        t = token_t::t_t{}["sbracket_close"];
         e.i();
       }
       else if(e.gc() == '('){
-        t = token_t::t_t::parenthese_open;
+        t = token_t::t_t{}["parenthese_open"];
         e.i();
       }
       else if(e.gc() == ')'){
-        t = token_t::t_t::parenthese_close;
+        t = token_t::t_t{}["parenthese_close"];
         e.i();
       }
       else if(e.gc() == ';'){
-        t = token_t::t_t::semicolon;
+        t = token_t::t_t{}["semicolon"];
         e.i();
       }
       #if set_debug
@@ -254,9 +256,9 @@ struct pile_t{
         }
       #endif
 
-      assert(t != (token_t::t_t)-1);
+      assert(t != token_t::t_t::id_t{});
 
-      if(t == token_t::t_t::keyword || t == token_t::t_t::number){
+      if(t == token_t::t_t{}["word"] || t == token_t::t_t{}["number"]){
         while(1){
           auto c = e.gc();
           if(STR_ischar_digit(c) || STR_ischar_char(c) || c == '_'){}
@@ -277,19 +279,28 @@ struct pile_t{
     std::vector<token_t> tokens;
 
     struct struct_data_t{
-
+      std::string type_name;
     };
     std::vector<struct_data_t> structs;
     structs.push_back({});
 
     struct scope_t{
-      uintptr_t StructID;
+      struct about_to_struct_t{
+        std::string type_name;
+      };
+      struct struct_t{
+        uintptr_t StructID;
+      };
+      std::variant<about_to_struct_t, struct_t> type;
+
       std::vector<token_t> tokens;
     };
     std::vector<scope_t> scopes;
-    scopes.push_back({
-      .StructID = 0
-    });
+    {
+      scope_t scope;
+      scope.type = scope_t::struct_t{.StructID = 0};
+      scopes.push_back(scope);
+    }
 
     while(1){
       e.SkipTillSomething();
@@ -298,9 +309,21 @@ struct pile_t{
       }
 
       auto token = parse_token();
-      scopes.back().tokens.push_back(token);
-      std::println("{}", token.data);
-      //if(token.t == token_t::t_t::cbracket_close)
+      if(auto sd = std::get_if<scope_t::about_to_struct_t>(&scopes.back().type)){
+        if(token.t != token_t::t_t{}["word"]){
+          __abort();
+        }
+        sd->type_name = token.data;
+      }
+      else if(token.t == token_t::t_t{}["word"] && token.data == "struct"){
+        scope_t scope;
+        scope.type = scope_t::about_to_struct_t{};
+        scopes.push_back(scope);
+      }
+      else{
+        scopes.back().tokens.push_back(token);
+      }
+      std::println("{}  {}  {}", token_t::t_t::name(token.t.gint()), token.data.size() ? "->" : "", token.data);
     }
     return 0;
   }
